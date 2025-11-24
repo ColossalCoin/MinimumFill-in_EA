@@ -1,5 +1,7 @@
 import random
+import time
 import networkx as nx
+import numpy as np
 from deap import creator, base, tools
 
 # DEAP requiere que se indique si la función de aptitud debe ser minimizada o maximizada. Declaramos que la función
@@ -30,7 +32,7 @@ class GraphChordalizer:
         self.num_vertex = self.graph.number_of_nodes()
         # Toolbox permite llamar a los operadores definidos para cada individuo o multiconjunto de individuos.
         self.toolbox = base.Toolbox()
-    def evaluate_fill_in(self, individual):
+    def evaluate_fill_in(self, matrix_data):
         """
         Evalúa el relleno para un grafo dado un ordenamiento para el mismo. La función calcula la cardinalidad de la
         triangulación resultante del orden de eliminación definido. Se utiliza una copia del grafo original para prevenir
@@ -50,7 +52,7 @@ class GraphChordalizer:
         fill_in_count = 0
 
         # Iteramos sobre los vértices del grafo
-        for vertex in individual:
+        for vertex in matrix_data:
             # Comparamos por pares los vecinos de cada vertex según el ordenamiento dado
             neighbors = list(graph_copy.neighbors(vertex))
             for i in range(len(neighbors)):
@@ -70,7 +72,7 @@ class GraphChordalizer:
         # Regresamos el conteo de aristas agregadas (tuple por requisito de DEAP)
         return fill_in_count,
     @ staticmethod
-    def SwapMutation(individual):
+    def swap_mutation(individual):
         """
         SwapMutation (Mutación por Intercambio) es un operador de mutación de algoritmos genéticos. Selecciona
         aleatoriamente dos posiciones distintas en la secuencia de un individuo e intercambia sus valores.
@@ -86,7 +88,36 @@ class GraphChordalizer:
 
         # DEAP requiere que el resultado sea un objeto tipo tuple.
         return individual,
+    @staticmethod
+    def roulette_selection(individuals, k):
+        """
+        Realiza la operación de selección por ruleta para elegir 'k' individuos de la población proporcionada, basándose
+        en sus valores de aptitud (fitness). Los individuos con mejor aptitud tienen mayores probabilidades de ser
+        seleccionados, pero los individuos con menor aptitud también tienen una probabilidad de selección distinta de cero.
 
+        La aptitud de los individuos se transforma para garantizar que incluso el individuo con menor aptitud pueda
+        participar en el proceso de selección. Esto se logra ajustando los valores de aptitud en relación con la aptitud
+        del peor individuo en la población.
+
+        :param individuals: Una lista de individuos de la cual se realizará la selección. Cada individuo en la lista debe
+            tener un atributo 'fitness' que contenga el valor de aptitud.
+        :param k: El número de individuos a seleccionar.
+        :return: Una lista de 'k' individuos seleccionados con base en la lógica de selección por ruleta.
+        :rtype: list
+        """
+        # Calculamos la aptitud de cada individuo
+        fitnesses = [ind.fitness.values[0] for ind in individuals]
+
+        # Buscamos el candidato menos apto (mayor número de aristas agregadas)
+        worst_fitness = max(fitnesses)
+
+        # Invertimos la aptitud con base en el peor individuo. Sumamos 1.0 para que todos los individuos tengan
+        # probabilidad no cero de ser seleccionados
+        weights = [(worst_fitness - fitness) + 1.0 for fitness in fitnesses]
+
+        # Elegimos k individuos de acuerdo a los pesos asignados.
+        chosen = random.choices(individuals, weights=weights, k=k)
+        return chosen
 
     # Para utilizar Toolbox adecuadamente, es necesario configurar los operadores requeridos.
     def _setup_toolbox(self):
@@ -98,21 +129,104 @@ class GraphChordalizer:
         La función prepara lo siguiente:
         1. Registra un generador de permutaciones para los índices de los vértices.
         2. Define cómo se estructuran y se crean los individuos y la población inicial.
-        3. Establece las operaciones de cruce (PMX), mutación (intercambio simple) y selección (selección por torneo).
+        3. Establece las operaciones de selección de progenitores (ruleta), cruce (PMX), mutación (intercambio simple) y
+            selección de supervivientes (selección por torneo).
         4. Asocia una función de evaluación para determinar la aptitud (fitness) de los individuos.
         """
         # Especificamos la forma en que se generarán las permutaciones de acuerdo al tamaño del grafo.
         self.toolbox.register(alias="indexes", random.sample, range(self.num_vertex), self.num_vertex)
 
         # Creamos una población inicial como una lista de la estructura antes definida "Individual".
-        self.toolbox.register(alias="individual", tools.initIterate, creator.Individual)
-        self.toolbox.register(alias="population", tools.initRepeat, list, self.toolbox.individual)
+        self.toolbox.register("individual", tools.initIterate, creator.Individual)
+        self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
 
-        # Definimos los operadores de cruce (PMX uniforme), mutación (intercambio simple) y selección de descendencia
-        # (torneo).
-        self.toolbox.register(alias="mate", tools.cxUniformPartialyMatched)
-        self.toolbox.register(alias="mutate", self.SwapMutation)
-        self.toolbox.register(alias="select_offspring", tools.selTournament, tournsize=5)
+        # Definimos los operadores de selección de progenitores (ruleta) cruce (PMX uniforme), mutación (intercambio
+        # simple) y selección de supervivientes (torneo).
+        self.toolbox.register("select_parents", self.roulette_selection)
+        self.toolbox.register("mate", tools.cxUniformPartialyMatched)
+        self.toolbox.register("mutate", self.swap_mutation)
+        self.toolbox.register("select_offspring", tools.selTournament, tournsize=5)
 
         # Evaluamos el fitness de los individuos
-        self.toolbox.register(alias="evaluate", self.evaluate_fill_in)
+        self.toolbox.register("evaluate", self.evaluate_fill_in)
+    def run_ea(self, num_generations=50, population_size=100, crossover_probability=0.7, mutation_probability=0.2):
+        """
+        Ejecuta un algoritmo evolutivo (EA) con los parámetros especificados. La función incluye la generación de la
+        población inicial, la evaluación de la aptitud (fitness), las operaciones genéticas (selección, cruce y mutación),
+        y rastrea el progreso a través de las generaciones con registro estadístico. También actualiza el Salón de la
+        Fama (Hall of Fame, HoF) y registra el tiempo de cálculo para cada generación.
+
+        :param num_generations: El número de generaciones que se ejecutará el EA.
+        :type num_generations: int
+        :param population_size: El número de individuos en la población.
+        :type population_size: int
+        :param crossover_probability: La probabilidad con la que se aplica la operación de cruce.
+        :type crossover_probability: float
+        :param mutation_probability: La probabilidad con la que se aplica la operación de mutación.
+        :type mutation_probability: float
+        :return: Un libro de registro (logbook) que contiene los registros estadísticos del rendimiento de cada generación.
+        :rtype: deap.tools.Logbook
+        """
+        # Creamos una población inicial
+        population = self.toolbox.population(n=population_size)
+
+        # Evaluamos la población inicial
+        fitnesses = list(map(self.toolbox.evaluate, population))
+        for individual, fitness in zip(population, fitnesses):
+            individual.fitness.values = fitness
+
+        # Registramos estadísticos para monitorear cada población
+        stats = tools.Statistics(lambda ind: ind.fitness.values)
+
+        stats.register("avg", np.mean)
+        stats.register("std", np.std)
+        stats.register("min", np.min)   # Peor triangulación
+        stats.register("max", np.max)   # Mejor triangulación
+
+        hof = tools.HallOfFame(1)   # Mejor individuo de todas las generaciones (Hall of fame)
+
+        # Definimos el bucle a ejecutar en cada generación
+        for num_generation in range(num_generations):
+            # Inicializamos un temporizador para medir el tiempo de ejecución de cada generación
+            start_time = time.time()
+
+            # Seleccionamos padres
+            offspring = self.toolbox.select_parents(population, len(population))
+
+            # Clonamos los padres seleccionados (necesario en DEAP)
+            offspring = list(map(self.toolbox.clone, matepool)
+
+            # Cruzamos los padres
+            for child1, child2 in zip(matepool[::2], matepool[1::2]):
+                if random.random() < crossover_probability:
+                    self.toolbox.mate(child1, child2)
+                    del child1.fitness.values
+                    del child2.fitness.values
+
+            # Mutamos a los descendientes
+            for mutant in offspring:
+                if random.random() < mutation_probability:
+                    self.toolbox.mutate(mutant)
+                    del mutant.fitness.values
+
+            # Evaluamos la descendencia
+            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+            fitnesses = map(self.toolbox.evaluate, invalid_ind)
+            for ind, fitness in zip(invalid_ind, fitnesses):
+                ind.fitness.values = fitness
+
+            # Seleccionamos los supervivientes
+            population = self.toolbox.select_offspring(population + offspring, k=population_size)
+
+            # Actualizamos el HoF
+            hof.update(population)
+
+            # Compilamos estadísticos
+            record = stats.compile(population)
+
+            # Agregamos el tiempo de ejecución de esta generación
+            record["time"] = time.time() - start_time
+
+            # Registramos los estadísticos de esta generación
+            logbook.record(gen=num_generation, **record)
+        return logbook
