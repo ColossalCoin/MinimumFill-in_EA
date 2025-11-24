@@ -1,21 +1,23 @@
 import random
 import time
+import multiprocessing
 import networkx as nx
 import numpy as np
 from deap import creator, base, tools
 
-# DEAP requiere que se indique si la función de aptitud debe ser minimizada o maximizada. Declaramos que la función
-# de aptitud debe ser minimizada usando weights=(-1.0,)
-creator.create(name="FitnessMin", base.Fitness, weights=(-1.0,))
+if not hasattr(creator, "FitnessMin"):  # Evita conflictos por redefinir la misma función de aptitud
+    # DEAP requiere que se indique si la función de aptitud debe ser minimizada o maximizada. Declaramos que la función
+    # de aptitud debe ser minimizada usando weights=(-1.0,)
+    creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
 
-# Creamos un individuo de tipo permutation a partir de una lista. Usar arreglos de numpy no es conveniente en este caso
-# dado que DEAP utiliza Python puro, es decir, requeriría convertir los arreglos en listas cada iteración.
-creator.create(name="Individual", list, fitness=creator.FitnessMin)
+    # Creamos un individuo de tipo permutation a partir de una lista. Usar arreglos de numpy no es conveniente en este caso
+    # dado que DEAP utiliza Python puro, es decir, requeriría convertir los arreglos en listas cada iteración.
+    creator.create("Individual", list, fitness=creator.FitnessMin)
 
 
 # Definimos el AE como una clase.
 class GraphChordalizer:
-    def __init__(self, matrix_data):
+    def __init__(self, graph):
         """
         Constructor para inicializar una instancia con atributos de datos específicos.
 
@@ -26,13 +28,14 @@ class GraphChordalizer:
             representa si los vértices correspondientes osn adyacentes.
         :type matrix_data: numpy.ndarray
         """
-        # Suponemos que la matriz del constructor es un arreglo de Numpy y se convierte en un grafo de NetworkX. Este
-        # caso no genera problemas dado que la conversión a grafo se realiza una sola vez.
-        self.graph = nx.from_numpy_array(matrix_data)
+        # Suponemos que la matriz del constructor es un grafo de NetworkX.
+        self.graph = graph
         self.num_vertex = self.graph.number_of_nodes()
         # Toolbox permite llamar a los operadores definidos para cada individuo o multiconjunto de individuos.
         self.toolbox = base.Toolbox()
-    def evaluate_fill_in(self, matrix_data):
+        self._setup_toolbox()   # Es necesario cargar los operadores desde un inicio
+    @staticmethod
+    def evaluate_fill_in(individual, graph):
         """
         Evalúa el relleno para un grafo dado un ordenamiento para el mismo. La función calcula la cardinalidad de la
         triangulación resultante del orden de eliminación definido. Se utiliza una copia del grafo original para prevenir
@@ -47,12 +50,12 @@ class GraphChordalizer:
         :rtype: tuple
         """
         # Copia del grafo para no alterar el original
-        graph_copy = self.graph.copy()
+        graph_copy = graph.copy()
         # Inicializamos el conteo de aristas agregadas en cero
         fill_in_count = 0
 
         # Iteramos sobre los vértices del grafo
-        for vertex in matrix_data:
+        for vertex in graph:
             # Comparamos por pares los vecinos de cada vertex según el ordenamiento dado
             neighbors = list(graph_copy.neighbors(vertex))
             for i in range(len(neighbors)):
@@ -134,22 +137,23 @@ class GraphChordalizer:
         4. Asocia una función de evaluación para determinar la aptitud (fitness) de los individuos.
         """
         # Especificamos la forma en que se generarán las permutaciones de acuerdo al tamaño del grafo.
-        self.toolbox.register(alias="indexes", random.sample, range(self.num_vertex), self.num_vertex)
+        self.toolbox.register("indexes", random.sample, range(self.num_vertex), self.num_vertex)
 
         # Creamos una población inicial como una lista de la estructura antes definida "Individual".
-        self.toolbox.register("individual", tools.initIterate, creator.Individual)
+        self.toolbox.register("individual", tools.initIterate, creator.Individual, self.toolbox.indexes)
         self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
 
         # Definimos los operadores de selección de progenitores (ruleta) cruce (PMX uniforme), mutación (intercambio
         # simple) y selección de supervivientes (torneo).
         self.toolbox.register("select_parents", self.roulette_selection)
-        self.toolbox.register("mate", tools.cxUniformPartialyMatched)
+        self.toolbox.register("mate", tools.cxUniformPartialyMatched, indpb=0.5)
         self.toolbox.register("mutate", self.swap_mutation)
         self.toolbox.register("select_offspring", tools.selTournament, tournsize=5)
 
         # Evaluamos el fitness de los individuos
-        self.toolbox.register("evaluate", self.evaluate_fill_in)
-    def run_ea(self, num_generations=50, population_size=100, crossover_probability=0.7, mutation_probability=0.2):
+        self.toolbox.register("evaluate", self.evaluate_fill_in, graph=self.graph)
+    def run_ea(self, num_generations=50, population_size=100, crossover_probability=0.7, mutation_probability=0.2,
+               verbose=True):
         """
         Ejecuta un algoritmo evolutivo (EA) con los parámetros especificados. La función incluye la generación de la
         población inicial, la evaluación de la aptitud (fitness), las operaciones genéticas (selección, cruce y mutación),
@@ -167,66 +171,97 @@ class GraphChordalizer:
         :return: Un libro de registro (logbook) que contiene los registros estadísticos del rendimiento de cada generación.
         :rtype: deap.tools.Logbook
         """
-        # Creamos una población inicial
-        population = self.toolbox.population(n=population_size)
+        # Utilizamos paralelización para hacer el código más eficiente
+        cpus = multiprocessing.cpu_count()
+        # Utilizamos gestión automática de memoria son 'with'
+        with multiprocessing.Pool(processes=cpus) as pool:
+            # Reemplazamos el 'map' estándar de Python por el 'map' del pool
+            self.toolbox.register("map", pool.map)
 
-        # Evaluamos la población inicial
-        fitnesses = list(map(self.toolbox.evaluate, population))
-        for individual, fitness in zip(population, fitnesses):
-            individual.fitness.values = fitness
+            # Creamos una población inicial
+            population = self.toolbox.population(n=population_size)
 
-        # Registramos estadísticos para monitorear cada población
-        stats = tools.Statistics(lambda ind: ind.fitness.values)
+            # Evaluamos la población inicial
+            fitnesses = list(map(self.toolbox.evaluate, population))
+            for individual, fitness in zip(population, fitnesses):
+                individual.fitness.values = fitness
 
-        stats.register("avg", np.mean)
-        stats.register("std", np.std)
-        stats.register("min", np.min)   # Peor triangulación
-        stats.register("max", np.max)   # Mejor triangulación
+            # Registramos estadísticos para monitorear cada población
+            stats = tools.Statistics(lambda ind: ind.fitness.values)
 
-        hof = tools.HallOfFame(1)   # Mejor individuo de todas las generaciones (Hall of fame)
+            stats.register("avg", np.mean)
+            stats.register("std", np.std)
+            stats.register("min", np.min)   # Peor triangulación
+            stats.register("max", np.max)   # Mejor triangulación
 
-        # Definimos el bucle a ejecutar en cada generación
-        for num_generation in range(num_generations):
-            # Inicializamos un temporizador para medir el tiempo de ejecución de cada generación
-            start_time = time.time()
+            logbook = tools.Logbook()
+            logbook.header = ["gen", "avg", "std", "min", "max", "time"]
 
-            # Seleccionamos padres
-            offspring = self.toolbox.select_parents(population, len(population))
+            if verbose:
+                print(f"{'Gen':<5} | {'Min':<5} | {'Avg':<8} | {'Max':<5} | {'Std':<5}", flush=True)
 
-            # Clonamos los padres seleccionados (necesario en DEAP)
-            offspring = list(map(self.toolbox.clone, matepool)
+            hof = tools.HallOfFame(1)   # Mejor individuo de todas las generaciones (Hall of fame)
 
-            # Cruzamos los padres
-            for child1, child2 in zip(matepool[::2], matepool[1::2]):
-                if random.random() < crossover_probability:
-                    self.toolbox.mate(child1, child2)
-                    del child1.fitness.values
-                    del child2.fitness.values
+            # Definimos el bucle a ejecutar en cada generación
+            for num_generation in range(num_generations):
+                # Inicializamos un temporizador para medir el tiempo de ejecución de cada generación
+                start_time = time.time()
 
-            # Mutamos a los descendientes
-            for mutant in offspring:
-                if random.random() < mutation_probability:
-                    self.toolbox.mutate(mutant)
-                    del mutant.fitness.values
+                # Seleccionamos padres
+                offspring = self.toolbox.select_parents(population, len(population))
 
-            # Evaluamos la descendencia
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = map(self.toolbox.evaluate, invalid_ind)
-            for ind, fitness in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fitness
+                # Clonamos los padres seleccionados (necesario en DEAP)
+                offspring = list(map(self.toolbox.clone, offspring))
 
-            # Seleccionamos los supervivientes
-            population = self.toolbox.select_offspring(population + offspring, k=population_size)
+                # Cruzamos los padres
+                for child1, child2 in zip(offspring[::2], offspring[1::2]):
+                    if random.random() < crossover_probability:
+                        self.toolbox.mate(child1, child2)
+                        del child1.fitness.values
+                        del child2.fitness.values
 
-            # Actualizamos el HoF
-            hof.update(population)
+                # Mutamos a los descendientes
+                for mutant in offspring:
+                    if random.random() < mutation_probability:
+                        self.toolbox.mutate(mutant)
+                        del mutant.fitness.values
 
-            # Compilamos estadísticos
-            record = stats.compile(population)
+                # Evaluamos la descendencia
+                invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+                fitnesses = map(self.toolbox.evaluate, invalid_ind)
+                for ind, fitness in zip(invalid_ind, fitnesses):
+                    ind.fitness.values = fitness
 
-            # Agregamos el tiempo de ejecución de esta generación
-            record["time"] = time.time() - start_time
+                # Seleccionamos los supervivientes
+                population = self.toolbox.select_offspring(population + offspring, k=population_size)
 
-            # Registramos los estadísticos de esta generación
-            logbook.record(gen=num_generation, **record)
-        return logbook
+                # Actualizamos el HoF
+                hof.update(population)
+
+                # Compilamos estadísticos
+                record = stats.compile(population)
+
+                # Agregamos el tiempo de ejecución de esta generación
+                record["time"] = time.time() - start_time
+
+                # Registramos los estadísticos de esta generación
+                logbook.record(gen=num_generation, **record)
+
+                if verbose:
+                    print(f"{num_generation:<5} | {record['min']:<5.0f} | {record['avg']:<8.2f} | {record['max']:<5.0f} | "
+                          f"{record['std']:<5.2f}", flush=True)
+
+        return hof[0], logbook
+
+# --- Probamos que el código funcione correctamente ---
+if __name__ == "__main__":
+    # Creamos el grafo C_6, cuya triangulación mínima agrega 3 aristas.
+    G = nx.cycle_graph(6)
+
+    # Creamos una instancia de la clase GraphChordalizer
+    graph_chordalizer = GraphChordalizer(G)
+
+    # Corremos el algoritmo.
+    hof, logs = graph_chordalizer.run_ea(num_generations=20, population_size=10)
+
+    print(hof, hof.fitness.values)
