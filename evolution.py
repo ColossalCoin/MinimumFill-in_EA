@@ -34,6 +34,7 @@ class GraphChordalizer:
         # Toolbox permite llamar a los operadores definidos para cada individuo o multiconjunto de individuos.
         self.toolbox = base.Toolbox()
         self._setup_toolbox()   # Es necesario cargar los operadores desde un inicio
+
     @staticmethod
     def evaluate_fill_in(individual, graph):
         """
@@ -74,6 +75,7 @@ class GraphChordalizer:
 
         # Regresamos el conteo de aristas agregadas (tuple por requisito de DEAP)
         return fill_in_count,
+
     @ staticmethod
     def swap_mutation(individual):
         """
@@ -91,6 +93,7 @@ class GraphChordalizer:
 
         # DEAP requiere que el resultado sea un objeto tipo tuple.
         return individual,
+
     @staticmethod
     def roulette_selection(individuals, k):
         """
@@ -152,6 +155,7 @@ class GraphChordalizer:
 
         # Evaluamos el fitness de los individuos
         self.toolbox.register("evaluate", self.evaluate_fill_in, graph=self.graph)
+
     def run_ea(self, num_generations=50, population_size=100, crossover_probability=0.7, mutation_probability=0.2,
                verbose=True):
         """
