@@ -56,7 +56,7 @@ class GraphChordalizer:
         fill_in_count = 0
 
         # Iteramos sobre los vértices del grafo
-        for vertex in graph:
+        for vertex in individual:
             # Comparamos por pares los vecinos de cada vertex según el ordenamiento dado
             neighbors = list(graph_copy.neighbors(vertex))
             for i in range(len(neighbors)):
@@ -178,82 +178,65 @@ class GraphChordalizer:
         # Utilizamos paralelización para hacer el código más eficiente
         cpus = multiprocessing.cpu_count()
         # Utilizamos gestión automática de memoria son 'with'
-        with multiprocessing.Pool(processes=cpus) as pool:
-            # Reemplazamos el 'map' estándar de Python por el 'map' del pool
-            self.toolbox.register("map", pool.map)
+        try:
+            with multiprocessing.Pool(processes=cpus) as pool:
+                self.toolbox.register("map", pool.map)
+                return self._algorithm_logic(num_generations, population_size, crossover_probability,
+                                             mutation_probability, verbose)
+        except AssertionError:
+            # Fallback a serial si hay error de daemon
+            self.toolbox.register("map", map)
+            return self._algorithm_logic(num_generations, population_size, crossover_probability,
+                                         mutation_probability, verbose)
 
-            # Creamos una población inicial
-            population = self.toolbox.population(n=population_size)
+    def _algorithm_logic(self, num_generations, population_size, crossover_probability, mutation_probability, verbose):
+        # Lógica extraída para poder llamarla con o sin Pool
+        population = self.toolbox.population(n=population_size)
+        fitnesses = list(map(self.toolbox.evaluate, population))
+        for individual, fitness in zip(population, fitnesses):
+            individual.fitness.values = fitness
 
-            # Evaluamos la población inicial
-            fitnesses = list(map(self.toolbox.evaluate, population))
-            for individual, fitness in zip(population, fitnesses):
-                individual.fitness.values = fitness
+        stats = tools.Statistics(lambda ind: ind.fitness.values)
+        stats.register("avg", np.mean)
+        stats.register("std", np.std)
+        stats.register("min", np.min)
+        stats.register("max", np.max)
 
-            # Registramos estadísticos para monitorear cada población
-            stats = tools.Statistics(lambda ind: ind.fitness.values)
+        logbook = tools.Logbook()
+        logbook.header = ["gen", "avg", "std", "min", "max", "time"]
 
-            stats.register("avg", np.mean)
-            stats.register("std", np.std)
-            stats.register("min", np.min)   # Peor triangulación
-            stats.register("max", np.max)   # Mejor triangulación
+        hof = tools.HallOfFame(1)
 
-            logbook = tools.Logbook()
-            logbook.header = ["gen", "avg", "std", "min", "max", "time"]
+        for num_generation in range(num_generations):
+            start_time = time.time()
+            offspring = self.toolbox.select_parents(population, len(population))
+            offspring = list(map(self.toolbox.clone, offspring))
+
+            for child1, child2 in zip(offspring[::2], offspring[1::2]):
+                if random.random() < crossover_probability:
+                    self.toolbox.mate(child1, child2)
+                    del child1.fitness.values
+                    del child2.fitness.values
+
+            for mutant in offspring:
+                if random.random() < mutation_probability:
+                    self.toolbox.mutate(mutant)
+                    del mutant.fitness.values
+
+            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+            fitnesses = map(self.toolbox.evaluate, invalid_ind)
+            for ind, fitness in zip(invalid_ind, fitnesses):
+                ind.fitness.values = fitness
+
+            population = self.toolbox.select_offspring(population + offspring, k=population_size)
+            hof.update(population)
+
+            record = stats.compile(population)
+            record["time"] = time.time() - start_time
+            logbook.record(gen=num_generation, **record)
 
             if verbose:
-                print(f"{'Gen':<5} | {'Min':<5} | {'Avg':<8} | {'Max':<5} | {'Std':<5}", flush=True)
-
-            hof = tools.HallOfFame(1)   # Mejor individuo de todas las generaciones (Hall of fame)
-
-            # Definimos el bucle a ejecutar en cada generación
-            for num_generation in range(num_generations):
-                # Inicializamos un temporizador para medir el tiempo de ejecución de cada generación
-                start_time = time.time()
-
-                # Seleccionamos padres
-                offspring = self.toolbox.select_parents(population, len(population))
-
-                # Clonamos los padres seleccionados (necesario en DEAP)
-                offspring = list(map(self.toolbox.clone, offspring))
-
-                # Cruzamos los padres
-                for child1, child2 in zip(offspring[::2], offspring[1::2]):
-                    if random.random() < crossover_probability:
-                        self.toolbox.mate(child1, child2)
-                        del child1.fitness.values
-                        del child2.fitness.values
-
-                # Mutamos a los descendientes
-                for mutant in offspring:
-                    if random.random() < mutation_probability:
-                        self.toolbox.mutate(mutant)
-                        del mutant.fitness.values
-
-                # Evaluamos la descendencia
-                invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-                fitnesses = map(self.toolbox.evaluate, invalid_ind)
-                for ind, fitness in zip(invalid_ind, fitnesses):
-                    ind.fitness.values = fitness
-
-                # Seleccionamos los supervivientes
-                population = self.toolbox.select_offspring(population + offspring, k=population_size)
-
-                # Actualizamos el HoF
-                hof.update(population)
-
-                # Compilamos estadísticos
-                record = stats.compile(population)
-
-                # Agregamos el tiempo de ejecución de esta generación
-                record["time"] = time.time() - start_time
-
-                # Registramos los estadísticos de esta generación
-                logbook.record(gen=num_generation, **record)
-
-                if verbose:
-                    print(f"{num_generation:<5} | {record['min']:<5.0f} | {record['avg']:<8.2f} | {record['max']:<5.0f} | "
-                          f"{record['std']:<5.2f}", flush=True)
+                print(f"Gen {num_generation}: Min {record['min']:.0f}")
 
         return hof[0], logbook
 
