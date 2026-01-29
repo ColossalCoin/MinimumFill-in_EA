@@ -18,7 +18,7 @@ def count_fillin(graph, ordering=None):
     :param graph: Grafo NetworkX original.
     :param ordering: Lista de nodos en el orden de eliminación.
                      Si es None, usa el orden natural (0, 1, 2...).
-    :return: int (Número total de aristas añadidas)
+    :return int (Número total de aristas añadidas)
     """
     # Trabajamos sobre una copia para no destruir el original
     H = graph.copy()
@@ -53,35 +53,47 @@ def count_fillin(graph, ordering=None):
     return fill_in_count
 
 
-def greedy_minimum_degree(graph):
+def greedy_minimum_degree(graph, compute_cost=False):
     """
-    Implementación del algoritmo de mínimo grado aproximado (AMD).
-    Selecciona siempre el nodo con menor grado actual.
+    Implementación del algoritmo de mínimo grado (MD).
 
-    :return: Lista con el orden de eliminación.
+    Args:
+    :param graph: Grafo de NetworkX.
+    :param compute_cost (bool): Si es True, devuelve una tupla (orden, costo_fillin).
+                                Si es False, devuelve solo la lista del orden (comportamiento original).
+
+    :return list o (list, int): Orden de eliminación y opcionalmente el costo.
     """
+    # Trabajamos sobre una copia para no destruir el grafo original
     H = graph.copy()
     ordering = []
+    fill_in_count = 0
 
-    # Usamos una barra de progreso manual pequeña o silencio
-    # Es una heurística constructiva voraz
     while H.number_of_nodes() > 0:
         # 1. Encontrar nodo con grado mínimo
-        # (Ordenamos por grado y luego por ID para determinismo en empates)
+        # Usamos el grado y el ID del nodo como criterio de desempate
         degrees = dict(H.degree())
         min_node = min(degrees, key=lambda k: (degrees[k], k))
 
         # 2. Simular Fill-in local (conectar vecinos)
         neighbors = list(H.neighbors(min_node))
+
+        # Iteramos sobre los pares de vecinos para formar el clique
         for i in range(len(neighbors)):
             for j in range(i + 1, len(neighbors)):
                 u, v = neighbors[i], neighbors[j]
                 if not H.has_edge(u, v):
                     H.add_edge(u, v)
+                    # Solo incrementamos si estamos calculando el costo
+                    if compute_cost:
+                        fill_in_count += 1
 
         # 3. Eliminar nodo y guardar en orden
         H.remove_node(min_node)
         ordering.append(min_node)
+
+    if compute_cost:
+        return ordering, fill_in_count
 
     return ordering
 
