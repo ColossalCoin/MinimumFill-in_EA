@@ -2,8 +2,6 @@ import os
 import pickle
 import pandas as pd
 import networkx as nx
-import numpy as np
-from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import reverse_cuthill_mckee
 from tqdm import tqdm
 
