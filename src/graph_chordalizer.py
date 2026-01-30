@@ -4,6 +4,7 @@ import multiprocessing
 import networkx as nx
 import numpy as np
 from deap import creator, base, tools
+from utils.generate_baselines import count_fillin
 
 if not hasattr(creator, "FitnessMin"):  # Evita conflictos por redefinir la misma función de aptitud
     # DEAP requiere que se indique si la función de aptitud debe ser minimizada o maximizada. Declaramos que la función
@@ -35,46 +36,41 @@ class GraphChordalizer:
         self.toolbox = base.Toolbox()
         self._setup_toolbox()   # Es necesario cargar los operadores desde un inicio
 
+    def _setup_toolbox(self):
+        """
+        Inicializa y configura la "caja de herramientas" (toolbox) del algoritmo genético con las operaciones requeridas,
+        tales como la inicialización de la población, los métodos de cruce, las estrategias de mutación y los mecanismos
+        de selección.
+
+        La función prepara lo siguiente:
+        1. Registra un generador de permutaciones para los índices de los vértices.
+        2. Define cómo se estructuran y se crean los individuos y la población inicial.
+        3. Establece las operaciones de selección de progenitores (ruleta), cruce (PMX), mutación (intercambio simple) y
+            selección de supervivientes (selección por torneo).
+        4. Asocia una función de evaluación para determinar la aptitud (fitness) de los individuos.
+        """
+        # Especificamos la forma en que se generarán las permutaciones de acuerdo al tamaño del grafo.
+        self.toolbox.register("indexes", random.sample, range(self.num_vertex), self.num_vertex)
+
+        # Creamos una población inicial como una lista de la estructura antes definida "Individual".
+        self.toolbox.register("individual", tools.initIterate, creator.Individual, self.toolbox.indexes)
+        self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
+
+        # Definimos los operadores de selección de progenitores (ruleta) cruce (PMX uniforme), mutación (intercambio
+        # simple) y selección de supervivientes (torneo).
+        self.toolbox.register("select_parents", self.roulette_selection)
+        self.toolbox.register("mate", tools.cxUniformPartialyMatched, indpb=0.5)
+        self.toolbox.register("mutate", self.swap_mutation)
+        self.toolbox.register("select_offspring", tools.selTournament, tournsize=5)
+
+        # Evaluamos el fitness de los individuos
+        self.toolbox.register("evaluate", self.eval_wrapper, graph=self.graph)
+
     @staticmethod
-    def evaluate_fill_in(individual, graph):
-        """
-        Evalúa el relleno para un grafo dado un ordenamiento para el mismo. La función calcula la cardinalidad de la
-        triangulación resultante del orden de eliminación definido. Se utiliza una copia del grafo original para prevenir
-        modificaciones en este.
-
-        El contador de "fill-in" representa el número total de vértices que fueron añadidos para lograr la extensión cordal
-        mediante el proceso de eliminación.
-
-        :param individual: Lista ordenada de vértices que representa el orden de eliminación.
-        :type individual: list
-        :return: Una tupla que contiene el número de aristas agregadas.
-        :rtype: tuple
-        """
-        # Copia del grafo para no alterar el original
-        graph_copy = graph.copy()
-        # Inicializamos el conteo de aristas agregadas en cero
-        fill_in_count = 0
-
-        # Iteramos sobre los vértices del grafo
-        for vertex in individual:
-            # Comparamos por pares los vecinos de cada vertex según el ordenamiento dado
-            neighbors = list(graph_copy.neighbors(vertex))
-            for i in range(len(neighbors)):
-                for j in range(i + 1, len(neighbors)):
-                    u = neighbors[i]
-                    v = neighbors[j]
-
-                    # Si u no es adyacente a v, añadimos una arista que los conecte
-                    if not graph_copy.has_edge(u, v):
-                        graph_copy.add_edge(u, v)
-                        # El contador de aristas añadidas aumenta en 1
-                        fill_in_count += 1
-
-            # Eliminamos el vértice
-            graph_copy.remove_node(vertex)
-
-        # Regresamos el conteo de aristas agregadas (tuple por requisito de DEAP)
-        return fill_in_count,
+    def eval_wrapper(individual, graph):
+        """Wrapper para adaptar la firma de count_fillin a lo que pide DEAP (tupla)"""
+        # count_fillin devuelve un int, DEAP necesita (int, )
+        return count_fillin(graph, individual),
 
     @ staticmethod
     def swap_mutation(individual):
@@ -122,39 +118,10 @@ class GraphChordalizer:
         weights = [(worst_fitness - fitness) + 1.0 for fitness in fitnesses]
 
         # Elegimos k individuos de acuerdo a los pesos asignados.
-        chosen = random.choices(individuals, weights=weights, k=k)
-        return chosen
+        return random.choices(individuals, weights=weights, k=k)
 
     # Para utilizar Toolbox adecuadamente, es necesario configurar los operadores requeridos.
-    def _setup_toolbox(self):
-        """
-        Inicializa y configura la "caja de herramientas" (toolbox) del algoritmo genético con las operaciones requeridas,
-        tales como la inicialización de la población, los métodos de cruce, las estrategias de mutación y los mecanismos
-        de selección.
 
-        La función prepara lo siguiente:
-        1. Registra un generador de permutaciones para los índices de los vértices.
-        2. Define cómo se estructuran y se crean los individuos y la población inicial.
-        3. Establece las operaciones de selección de progenitores (ruleta), cruce (PMX), mutación (intercambio simple) y
-            selección de supervivientes (selección por torneo).
-        4. Asocia una función de evaluación para determinar la aptitud (fitness) de los individuos.
-        """
-        # Especificamos la forma en que se generarán las permutaciones de acuerdo al tamaño del grafo.
-        self.toolbox.register("indexes", random.sample, range(self.num_vertex), self.num_vertex)
-
-        # Creamos una población inicial como una lista de la estructura antes definida "Individual".
-        self.toolbox.register("individual", tools.initIterate, creator.Individual, self.toolbox.indexes)
-        self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
-
-        # Definimos los operadores de selección de progenitores (ruleta) cruce (PMX uniforme), mutación (intercambio
-        # simple) y selección de supervivientes (torneo).
-        self.toolbox.register("select_parents", self.roulette_selection)
-        self.toolbox.register("mate", tools.cxUniformPartialyMatched, indpb=0.5)
-        self.toolbox.register("mutate", self.swap_mutation)
-        self.toolbox.register("select_offspring", tools.selTournament, tournsize=5)
-
-        # Evaluamos el fitness de los individuos
-        self.toolbox.register("evaluate", self.evaluate_fill_in, graph=self.graph)
 
     def run_ea(self, num_generations=50, population_size=100, crossover_probability=0.7, mutation_probability=0.2,
                verbose=True):
