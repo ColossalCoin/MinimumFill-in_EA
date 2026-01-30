@@ -65,7 +65,6 @@ def greedy_minimum_degree(graph, compute_cost=False):
     # Trabajamos sobre una copia para no destruir el grafo original
     H = graph.copy()
     ordering = []
-    fill_in_count = 0
 
     while H.number_of_nodes() > 0:
         # 1. Encontrar nodo con grado mínimo
@@ -82,15 +81,13 @@ def greedy_minimum_degree(graph, compute_cost=False):
                 u, v = neighbors[i], neighbors[j]
                 if not H.has_edge(u, v):
                     H.add_edge(u, v)
-                    # Solo incrementamos si estamos calculando el costo
-                    if compute_cost:
-                        fill_in_count += 1
 
         # 3. Eliminar nodo y guardar en orden
         H.remove_node(min_node)
         ordering.append(min_node)
 
     if compute_cost:
+        fill_in_count = count_fillin(H, ordering)
         return ordering, fill_in_count
 
     return ordering
