@@ -122,90 +122,79 @@ class GraphChordalizer:
 
     # Para utilizar Toolbox adecuadamente, es necesario configurar los operadores requeridos.
 
+    def run_ea(self, num_generations=50, population_size=100, cx_prob=0.7, mut_prob=0.2, verbose=False):
 
-    def run_ea(self, num_generations=50, population_size=100, crossover_probability=0.7, mutation_probability=0.2,
-               verbose=True):
-        """
-        Ejecuta un algoritmo evolutivo (EA) con los parámetros especificados. La función incluye la generación de la
-        población inicial, la evaluación de la aptitud (fitness), las operaciones genéticas (selección, cruce y mutación),
-        y rastrea el progreso a través de las generaciones con registro estadístico. También actualiza el Salón de la
-        Fama (Hall of Fame, HoF) y registra el tiempo de cálculo para cada generación.
-
-        :param num_generations: El número de generaciones que se ejecutará el EA.
-        :type num_generations: int
-        :param population_size: El número de individuos en la población.
-        :type population_size: int
-        :param crossover_probability: La probabilidad con la que se aplica la operación de cruce.
-        :type crossover_probability: float
-        :param mutation_probability: La probabilidad con la que se aplica la operación de mutación.
-        :type mutation_probability: float
-        :return: Un libro de registro (logbook) que contiene los registros estadísticos del rendimiento de cada generación.
-        :rtype: deap.tools.Logbook
-        """
-        # Utilizamos paralelización para hacer el código más eficiente
-        cpus = multiprocessing.cpu_count()
-        # Utilizamos gestión automática de memoria son 'with'
-        try:
-            with multiprocessing.Pool(processes=cpus) as pool:
-                self.toolbox.register("map", pool.map)
-                return self._algorithm_logic(num_generations, population_size, crossover_probability,
-                                             mutation_probability, verbose)
-        except AssertionError:
-            # Fallback a serial si hay error de daemon
-            self.toolbox.register("map", map)
-            return self._algorithm_logic(num_generations, population_size, crossover_probability,
-                                         mutation_probability, verbose)
-
-    def _algorithm_logic(self, num_generations, population_size, crossover_probability, mutation_probability, verbose):
-        # Lógica extraída para poder llamarla con o sin Pool
-        population = self.toolbox.population(n=population_size)
-        fitnesses = list(map(self.toolbox.evaluate, population))
-        for individual, fitness in zip(population, fitnesses):
-            individual.fitness.values = fitness
-
+        # Configuración de estadísticas
         stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register("avg", np.mean)
-        stats.register("std", np.std)
         stats.register("min", np.min)
-        stats.register("max", np.max)
+        stats.register("avg", np.mean)
 
         logbook = tools.Logbook()
-        logbook.header = ["gen", "avg", "std", "min", "max", "time"]
 
-        hof = tools.HallOfFame(1)
+        # POOL: Manejo seguro para Windows/Linux
+        pool = None
+        try:
+            # Solo usar multiproceso si el grafo es grande (>50 nodos), si no el overhead gana
+            if self.num_vertex > 50:
+                pool = multiprocessing.Pool()
+                self.toolbox.register("map", pool.map)
 
-        for num_generation in range(num_generations):
-            start_time = time.time()
-            offspring = self.toolbox.select_parents(population, len(population))
-            offspring = list(map(self.toolbox.clone, offspring))
+            # --- ALGORITMO EVOLUTIVO (Mu + Lambda) ---
 
-            for child1, child2 in zip(offspring[::2], offspring[1::2]):
-                if random.random() < crossover_probability:
-                    self.toolbox.mate(child1, child2)
-                    del child1.fitness.values
-                    del child2.fitness.values
+            # 1. Población Inicial
+            pop = self.toolbox.population(n=population_size)
 
-            for mutant in offspring:
-                if random.random() < mutation_probability:
-                    self.toolbox.mutate(mutant)
-                    del mutant.fitness.values
+            # Evaluación inicial
+            fitnesses = list(map(self.toolbox.evaluate, pop))
+            for ind, fit in zip(pop, fitnesses):
+                ind.fitness.values = fit
 
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = map(self.toolbox.evaluate, invalid_ind)
-            for ind, fitness in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fitness
+            hof = tools.HallOfFame(1)
+            hof.update(pop)
 
-            population = self.toolbox.select_offspring(population + offspring, k=population_size)
-            hof.update(population)
+            for gen in range(num_generations):
+                # Selección de padres (toda la población compite)
+                offspring = self.toolbox.select_parents(pop, len(pop))
+                offspring = list(map(self.toolbox.clone, offspring))
 
-            record = stats.compile(population)
-            record["time"] = time.time() - start_time
-            logbook.record(gen=num_generation, **record)
+                # Cruce
+                for child1, child2 in zip(offspring[::2], offspring[1::2]):
+                    if random.random() < cx_prob:
+                        self.toolbox.mate(child1, child2)
+                        del child1.fitness.values
+                        del child2.fitness.values
 
-            if verbose:
-                print(f"Gen {num_generation}: Min {record['min']:.0f}")
+                # Mutación
+                for mutant in offspring:
+                    if random.random() < mut_prob:
+                        self.toolbox.mutate(mutant)
+                        del mutant.fitness.values
+
+                # Evaluación de nuevos candidatos
+                invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+                fitnesses = map(self.toolbox.evaluate, invalid_ind)
+                for ind, fit in zip(invalid_ind, fitnesses):
+                    ind.fitness.values = fit
+
+                # Supervivencia: Selección elitista combinando Padres + Hijos
+                pop = self.toolbox.select_offspring(pop + offspring, k=population_size)
+
+                # Guardar estadísticas
+                hof.update(pop)
+                record = stats.compile(pop)
+                logbook.record(gen=gen, **record)
+
+                if verbose:
+                    print(f"Gen {gen}: Mejor {record['min']:.0f}")
+
+        finally:
+            if pool:
+                pool.close()
+                pool.join()
+                self.toolbox.unregister("map")
 
         return hof[0], logbook
+
 
 # --- Probamos que el código funcione correctamente ---
 if __name__ == "__main__":
