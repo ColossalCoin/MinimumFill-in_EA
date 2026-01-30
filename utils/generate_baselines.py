@@ -145,7 +145,7 @@ def run_benchmarks():
     # 3. Exportar CSV
     df = pd.DataFrame(results)
     df.to_csv(BASELINE_FILE, index=False)
-    print(f"\n✅ Benchmarks guardados en '{BASELINE_FILE}'")
+    print(f"\nBenchmarks guardados en '{BASELINE_FILE}'")
 
     # Mostrar resumen rápido en consola
     print("\nResumen Promedio de Fill-in:")
