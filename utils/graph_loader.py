@@ -17,8 +17,10 @@ def load_pace_graph(filepath):
 
         with open(filepath, 'r') as f:
             for line in f:
-                # Ignorar comentarios y metadatos
-                if line.startswith(('#', '%')):
+                # Ignorar comentarios, metadatos, líneas vacías,
+                # comentarios ('c') y encabezados PACE ('p')
+                line = line.strip()
+                if not line or line.startswith(('c', 'p', '%', '#')):
                     continue
 
                 parts = line.split()
@@ -35,3 +37,43 @@ def load_pace_graph(filepath):
     except Exception as e:
         print(f"Error cargando {filepath}: {e}")
         return None
+
+
+# ----- SANITY CHECK -----
+if __name__ == "__main__":
+    print("Ejecutando prueba de carga de grafos...")
+
+    # 1. Crear un archivo PACE sintético temporal
+    test_filename = "test_graph_temp.gr"
+    content = """c Comentario de prueba
+    p cep 4 3
+    1 2
+    2 3
+    3 4
+    """
+    with open(test_filename, 'w') as f:
+        f.write(content)
+
+    try:
+        # 2. Cargar el grafo usando la función
+        G = load_pace_graph(test_filename)
+
+        # 3. Verificaciones (Asserts)
+        # El grafo 1-2-3-4 es una línea (Path Graph) de 4 nodos y 3 aristas.
+        assert G is not None, "La función retornó None"
+        assert G.number_of_nodes() == 4, f"Nodos esperados 4, obtenidos {G.number_of_nodes()}"
+        assert G.number_of_edges() == 3, f"Aristas esperadas 3, obtenidas {G.number_of_edges()}"
+
+        # Verificar que el re-etiquetado funcionó (nodos deben ser 0, 1, 2, 3)
+        assert sorted(list(G.nodes())) == [0, 1, 2, 3], "Los nodos no fueron re-etiquetados a enteros consecutivos"
+
+        print("El cargador de grafos funciona correctamente")
+
+    except AssertionError as e:
+        print(f"Error en la prueba: {e}")
+    except Exception as e:
+        print(f"Error inesperado: {e}")
+    finally:
+        # 4. Limpieza: Borrar archivo temporal
+        if os.path.exists(test_filename):
+            os.remove(test_filename)
