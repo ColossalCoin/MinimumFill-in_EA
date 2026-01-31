@@ -1,9 +1,4 @@
-import os
-import pickle
-import pandas as pd
 import networkx as nx
-from scipy.sparse.csgraph import reverse_cuthill_mckee
-from tqdm import tqdm
 
 DATASET_DIR = "datasets"
 BASELINE_FILE = "baselines.csv"
@@ -17,6 +12,7 @@ def count_fillin(G, ordering):
     :param ordering: Lista de nodos en el orden de eliminación.
     :return: int (Número total de aristas añadidas)
     """
+
     # Trabajamos sobre una copia para no destruir el original
     H = G.copy()
     fill_in_count = 0
@@ -81,3 +77,31 @@ def greedy_minimum_degree(G, compute_cost=False):
         return ordering, fill_in_count
 
     return ordering
+
+
+# ----- SANITY CHECK -----
+if __name__ == "__main__":
+    print("Ejecutando pruebas unitarias internas...")
+
+    # CASO DE PRUEBA: Grafo Lineal P5 (0-1-2-3-4)
+    # Un árbol o línea no necesita aristas de relleno si se elimina desde las hojas.
+    # El algoritmo AMD detecta hojas (grado 1) y las elimina primero.
+
+    G_test = nx.path_graph(5)
+
+    # 1. Prueba manual: Orden malo
+    manual_order = [3, 2, 1, 0, 4]
+    manual_cost = count_fillin(G_test, manual_order)
+    print(f"1. Orden manual [3, 2, 1, 0, 4] -> Costo: {manual_cost} (Esperado: 3)")
+
+    # 2. Prueba AMD: Debería encontrar el óptimo (0)
+    amd_order, amd_cost = greedy_minimum_degree(G_test, compute_cost=True)
+    print(f"2. Orden AMD {amd_order} -> Costo: {amd_cost} (Esperado: 0)")
+
+    # Validaciones automáticas
+    try:
+        assert manual_cost == 3, "Error en count_fillin (falso negativo)"
+        assert amd_cost == 0, "Error en greedy (no encontró óptimo) o bug de conteo"
+        print("Todas las pruebas pasaron exitosamente")
+    except AssertionError as e:
+        print(e)
