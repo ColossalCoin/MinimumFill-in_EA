@@ -9,38 +9,28 @@ DATASET_DIR = "datasets"
 BASELINE_FILE = "baselines.csv"
 
 
-def count_fillin(graph, ordering=None):
+def count_fillin(G, ordering):
     """
     Simula la eliminación gaussiana y cuenta las aristas de relleno (fill-in).
 
-    :param graph: Grafo NetworkX original.
+    :param G: Grafo NetworkX original.
     :param ordering: Lista de nodos en el orden de eliminación.
-                     Si es None, usa el orden natural (0, 1, 2...).
-    :return int (Número total de aristas añadidas)
+    :return: int (Número total de aristas añadidas)
     """
     # Trabajamos sobre una copia para no destruir el original
-    H = graph.copy()
-
-    # Si hay un orden específico, re-etiquetamos los nodos para procesarlos en orden 0, 1, 2...
-    if ordering is not None:
-        # Mapeo: Nodo -> Posición en el orden
-        mapping = {node: i for i, node in enumerate(ordering)}
-        H = nx.relabel_nodes(H, mapping)
-    else:
-        # Aseguramos que los nodos sean enteros consecutivos si es orden natural
-        H = nx.convert_node_labels_to_integers(H)
-
+    H = G.copy()
     fill_in_count = 0
-    nodes = sorted(list(H.nodes()))  # Procesamos 0, 1, 2...
 
     # Simulación del proceso de eliminación
-    for node in nodes:
+    for node in ordering:
         neighbors = list(H.neighbors(node))
 
         # Conectar todos los vecinos entre sí (formar un clique)
         for i in range(len(neighbors)):
             for j in range(i + 1, len(neighbors)):
                 u, v = neighbors[i], neighbors[j]
+
+                # Si no están conectados, agregamos arista (Fill-in)
                 if not H.has_edge(u, v):
                     H.add_edge(u, v)
                     fill_in_count += 1
@@ -51,19 +41,19 @@ def count_fillin(graph, ordering=None):
     return fill_in_count
 
 
-def greedy_minimum_degree(graph, compute_cost=False):
+def greedy_minimum_degree(G, compute_cost=False):
     """
     Implementación del algoritmo de mínimo grado (MD).
 
     Args:
-    :param graph: Grafo de NetworkX.
+    :param G: Grafo de NetworkX.
     :param compute_cost (bool): Si es True, devuelve una tupla (orden, costo_fillin).
                                 Si es False, devuelve solo la lista del orden (comportamiento original).
 
     :return list o (list, int): Orden de eliminación y opcionalmente el costo.
     """
     # Trabajamos sobre una copia para no destruir el grafo original
-    H = graph.copy()
+    H = G.copy()
     ordering = []
 
     while H.number_of_nodes() > 0:
@@ -87,7 +77,7 @@ def greedy_minimum_degree(graph, compute_cost=False):
         ordering.append(min_node)
 
     if compute_cost:
-        fill_in_count = count_fillin(graph, ordering)
+        fill_in_count = count_fillin(G, ordering)
         return ordering, fill_in_count
 
     return ordering
