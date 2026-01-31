@@ -87,7 +87,7 @@ def greedy_minimum_degree(graph, compute_cost=False):
         ordering.append(min_node)
 
     if compute_cost:
-        fill_in_count = count_fillin(H, ordering)
+        fill_in_count = count_fillin(graph, ordering)
         return ordering, fill_in_count
 
     return ordering
