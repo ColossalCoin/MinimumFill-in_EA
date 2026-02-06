@@ -61,7 +61,7 @@ class GraphChordalizer:
         self.toolbox.register("select_parents", self.roulette_selection)
         self.toolbox.register("mate", tools.cxUniformPartialyMatched, indpb=0.5)
         self.toolbox.register("mutate", self.swap_mutation)
-        self.toolbox.register("select_offspring", tools.selTournament, tournsize=5)
+        self.toolbox.register("select_offspring", tools.selTournament, tournsize=3)
 
         # Evaluamos el fitness de los individuos
         self.toolbox.register("evaluate", self.eval_wrapper, graph=self.graph)
