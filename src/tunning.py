@@ -22,68 +22,47 @@ class GridSearchTuner:
         self.param_grid = param_grid
         self.repetitions = repetitions
         self.generations = generations
-        self.results = []
+        self.results = []   # Lista plana de diccionarios
 
     def run(self, verbose=True):
         """
-        Ejecuta el Grid Search completo.
+        Ejecuta el Grid Search y devuelve datos crudos.
         """
-        # 1. Generar todas las combinaciones posibles (Producto Cartesiano)
         keys, values = zip(*self.param_grid.items())
         combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
 
         if verbose:
-            print(f"Iniciando Grid Search con {len(combinations)} configuraciones.")
-            print(f"Repeticiones por config: {self.repetitions}")
-            print(f"Total de ejecuciones: {len(combinations) * self.repetitions}")
+            total_runs = len(combinations) * self.repetitions
+            print(
+                f"Iniciando Tuning: {len(combinations)} configs x {self.repetitions} reps = {total_runs} ejecuciones.")
 
-        # 2. Iterar sobre configuraciones (con barra de progreso)
-        # Usamos tqdm para ver cuánto falta
-        iterator = tqdm(combinations, desc="Calibrando") if verbose else combinations
+        # Barra de progreso total
+        with tqdm(total=len(combinations) * self.repetitions, desc="Running Runs") as pbar:
 
-        for config in iterator:
-            metrics_run = []
+            for config_id, config in enumerate(combinations):
 
-            # 3. Repeticiones para robustez
-            for i in range(self.repetitions):
-                # Instanciamos el algoritmo
-                ga = GraphChordalizer(self.graph)
+                for rep in range(self.repetitions):
+                    # Ejecutar EA
+                    ea = GraphChordalizer(self.graph)
+                    best_ind, _ = ea.run_ea(
+                        num_generations=self.generations,
+                        population_size=config['pop_size'],
+                        cx_prob=config.get('cx_prob', 0.8),
+                        mut_prob=config.get('mut_prob', 0.2),
+                        verbose=False
+                    )
 
-                # Ejecutamos (muteado para no ensuciar consola)
-                best_ind, _ = ga.run_ea(
-                    num_generations=self.generations,
-                    population_size=config['pop_size'],
-                    cx_prob=config.get('cx_prob', 0.7),  # Default seguro
-                    mut_prob=config.get('mut_prob', 0.2),
-                    verbose=False
-                )
+                    # Guardamos cada dato individualmente
+                    # Aplanamos el diccionario de config + resultados del run
+                    record = config.copy()
+                    record.update({
+                        'config_id': config_id,  # ID único para agrupar luego
+                        'run_id': rep,  # Número de repetición
+                        'fitness': best_ind.fitness.values[0],
+                        'generations': self.generations
+                    })
 
-                # Guardamos el fitness final
-                metrics_run.append(best_ind.fitness.values[0])
+                    self.results.append(record)
+                    pbar.update(1)
 
-            # 4. Calcular estadísticas de la configuración
-            avg_fitness = sum(metrics_run) / len(metrics_run)
-            best_fitness = min(metrics_run)
-            worst_fitness = max(metrics_run)
-
-            # 5. Guardar registro
-            result_row = config.copy()
-            result_row.update({
-                'Avg_Best_Fitness': avg_fitness,
-                'Min_Fitness': best_fitness,
-                'Max_Fitness': worst_fitness,
-                'Repetitions': self.repetitions
-            })
-            self.results.append(result_row)
-
-        if verbose:
-            print("Calibración finalizada.")
-
-        return self.get_results_dataframe()
-
-    def get_results_dataframe(self):
-        """Retorna los resultados como DataFrame ordenado por mejor desempeño."""
-        df = pd.DataFrame(self.results)
-        if not df.empty:
-            df = df.sort_values(by='Avg_Best_Fitness', ascending=True).reset_index(drop=True)
-        return df
+        return pd.DataFrame(self.results)
