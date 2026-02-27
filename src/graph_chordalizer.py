@@ -3,7 +3,7 @@ import time
 import multiprocessing
 import numpy as np
 from deap import creator, base, tools
-from utils.heuristics import count_fillin_adjmatrix
+from utils.heuristics import count_fillin
 
 if not hasattr(creator, "FitnessMin"):  # Evita conflictos por redefinir la misma función de aptitud
     # DEAP requiere que se indique si la función de aptitud debe ser minimizada o maximizada. Declaramos que la función
@@ -77,7 +77,7 @@ class GraphChordalizer:
     def eval_wrapper(individual, adj_matrix):
         """Wrapper para adaptar la firma de count_fillin a lo que pide DEAP (tupla)"""
         # count_fillin devuelve un int, DEAP necesita (int, )
-        return count_fillin_adjmatrix(adj_matrix, individual, validate=False),
+        return count_fillin(adj_matrix, individual, validate=False),
 
     @ staticmethod
     def swap_mutation(individual):
