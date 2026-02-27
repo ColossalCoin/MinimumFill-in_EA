@@ -14,7 +14,7 @@ from src.graph_chordalizer import GraphChordalizer
 
 
 class GridSearchTuner:
-    def __init__(self, adj_matrix: np.ndarray, param_grid: dict, repetitions: int = 5, generations: int = 50, eval_budget: int | None = None):
+    def __init__(self, adj_matrix: np.ndarray, param_grid: dict, repetitions: int = 5, max_generations: int = 50, eval_budget: int | None = None):
         """
         Clase orquestadora para la calibración de hiperparámetros.
 
@@ -22,13 +22,13 @@ class GridSearchTuner:
         :param param_grid: Diccionario con listas de valores.
                            Ej: {'pop_size': [50, 100], 'mut_prob': [0.1], 'tournsize': [3, 5]}
         :param repetitions: Veces que se repite cada configuración (para robustez estadística).
-        :param generations: Número máximo de generaciones por ejecución.
+        :param max_generations: Número máximo de generaciones por ejecución.
         :param eval_budget: Presupuesto fijo de evaluaciones de fitness para todas las configuraciones.
         """
         self.adj_matrix = np.asarray(adj_matrix)
         self.param_grid = param_grid
         self.repetitions = repetitions
-        self.generations = generations
+        self.max_generations = max_generations
         self.results = []   # Lista plana de diccionarios
 
         # Definir presupuesto de evaluaciones común
@@ -38,7 +38,7 @@ class GridSearchTuner:
             if "pop_size" not in self.param_grid:
                 raise ValueError("param_grid debe contener la clave 'pop_size' o se debe especificar eval_budget.")
             max_pop = max(self.param_grid["pop_size"])
-            self.eval_budget = int(self.generations * max_pop)
+            self.eval_budget = int(self.max_generations * max_pop)
 
     def run(self, verbose=True):
         """
@@ -64,7 +64,7 @@ class GridSearchTuner:
                         tournsize=config.get('tournsize', 3),
                     )
                     best_ind, logbook = ea.run_ea(
-                        num_generations=self.generations,
+                        num_generations=self.max_generations,
                         population_size=config['pop_size'],
                         cx_prob=config.get('cx_prob', 0.8),
                         mut_prob=config.get('mut_prob', 0.2),
