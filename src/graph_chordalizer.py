@@ -26,7 +26,7 @@ if not hasattr(creator, "FitnessMin"):  # Evita conflictos por redefinir la mism
 
 # Definimos el AE como una clase.
 class GraphChordalizer:
-    def __init__(self, adj_matrix: np.ndarray):
+    def __init__(self, adj_matrix: np.ndarray, tournsize: int = 3):
         """
         Constructor para inicializar una instancia con atributos de datos específicos.
 
@@ -36,6 +36,8 @@ class GraphChordalizer:
         :param adj_matrix: Matriz de adyacencia cuadrada (n x n). Cada entrada indica si los vértices correspondientes
             son adyacentes. Se asume grafo no dirigido (simétrico) y sin autolazos (diagonal en 0).
         :type adj_matrix: numpy.ndarray
+        :param tournsize: Tamaño del torneo para la selección de supervivientes.
+        :type tournsize: int
         """
         A = np.asarray(adj_matrix)
         if A.ndim != 2 or A.shape[0] != A.shape[1]:
@@ -48,6 +50,7 @@ class GraphChordalizer:
             self.adj_matrix |= self.adj_matrix.T
         self.adj_matrix[np.arange(self.adj_matrix.shape[0]), np.arange(self.adj_matrix.shape[0])] = False
         self.num_vertex = int(self.adj_matrix.shape[0])
+        self.tournsize = int(tournsize)
         # Toolbox permite llamar a los operadores definidos para cada individuo o multiconjunto de individuos.
         self.toolbox = base.Toolbox()
         self._setup_toolbox()   # Es necesario cargar los operadores desde un inicio
@@ -77,7 +80,7 @@ class GraphChordalizer:
         self.toolbox.register("select_parents", self.roulette_selection)
         self.toolbox.register("mate", tools.cxUniformPartialyMatched, indpb=0.5)
         self.toolbox.register("mutate", self.swap_mutation)
-        self.toolbox.register("select_offspring", tools.selTournament, tournsize=3)
+        self.toolbox.register("select_offspring", tools.selTournament, tournsize=self.tournsize)
 
         # Evaluamos el fitness de los individuos
         self.toolbox.register("evaluate", self.eval_wrapper, adj_matrix=self.adj_matrix)

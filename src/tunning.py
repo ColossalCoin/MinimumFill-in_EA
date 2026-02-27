@@ -20,7 +20,7 @@ class GridSearchTuner:
 
         :param adj_matrix: Matriz de adyacencia NumPy (instancia de sacrificio).
         :param param_grid: Diccionario con listas de valores.
-                           Ej: {'pop_size': [50, 100], 'mut_prob': [0.1]}
+                           Ej: {'pop_size': [50, 100], 'mut_prob': [0.1], 'tournsize': [3, 5]}
         :param repetitions: Veces que se repite cada configuración (para robustez estadística).
         :param generations: Número máximo de generaciones por ejecución.
         :param eval_budget: Presupuesto fijo de evaluaciones de fitness para todas las configuraciones.
@@ -59,7 +59,10 @@ class GridSearchTuner:
 
                 for rep in range(self.repetitions):
                     # Ejecutar EA
-                    ea = GraphChordalizer(self.adj_matrix)
+                    ea = GraphChordalizer(
+                        self.adj_matrix,
+                        tournsize=config.get('tournsize', 3),
+                    )
                     best_ind, logbook = ea.run_ea(
                         num_generations=self.generations,
                         population_size=config['pop_size'],
