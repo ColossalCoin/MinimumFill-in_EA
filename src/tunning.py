@@ -1,14 +1,20 @@
 import pandas as pd
+import numpy as np
 import itertools
 from tqdm.auto import tqdm
 import sys
+from pathlib import Path
 
-sys.path.append('..')
+# Aseguramos que el directorio raíz del proyecto esté en sys.path
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from src.graph_chordalizer import GraphChordalizer
 
 
 class GridSearchTuner:
-    def __init__(self, adj_matrix, param_grid, repetitions=5, generations=50, eval_budget=None):
+    def __init__(self, adj_matrix: np.ndarray, param_grid: dict, repetitions: int = 5, generations: int = 50, eval_budget: int | None = None):
         """
         Clase orquestadora para la calibración de hiperparámetros.
 
@@ -19,8 +25,6 @@ class GridSearchTuner:
         :param generations: Número máximo de generaciones por ejecución.
         :param eval_budget: Presupuesto fijo de evaluaciones de fitness para todas las configuraciones.
         """
-        import numpy as np
-
         self.adj_matrix = np.asarray(adj_matrix)
         self.param_grid = param_grid
         self.repetitions = repetitions

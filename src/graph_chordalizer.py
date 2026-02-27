@@ -1,8 +1,17 @@
 import random
 import time
+import sys
 import multiprocessing
+from pathlib import Path
+
 import numpy as np
 from deap import creator, base, tools
+
+# Aseguramos que el directorio raíz del proyecto esté en sys.path
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from utils.heuristics import count_fillin
 
 if not hasattr(creator, "FitnessMin"):  # Evita conflictos por redefinir la misma función de aptitud
