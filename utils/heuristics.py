@@ -107,7 +107,7 @@ def greedy_minimum_degree(G, compute_cost=False):
 
     if compute_cost:
         return ordering, count_fillin(A, ordering)
-    return ordering
+    return ordering, None
 
 
 # ----- SANITY CHECK -----
