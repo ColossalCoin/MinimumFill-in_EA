@@ -129,7 +129,26 @@ class GraphChordalizer:
 
     # Para utilizar Toolbox adecuadamente, es necesario configurar los operadores requeridos.
 
-    def run_ea(self, num_generations=50, population_size=100, cx_prob=0.7, mut_prob=0.2, verbose=False):
+    def run_ea(
+        self,
+        num_generations=50,
+        population_size=100,
+        cx_prob=0.7,
+        mut_prob=0.2,
+        max_evaluations=None,
+        verbose=False,
+    ):
+        """
+        Ejecuta el algoritmo evolutivo (EA) con opción de limitar el número total de evaluaciones de fitness.
+
+        :param num_generations: Número máximo de generaciones a ejecutar.
+        :param population_size: Tamaño de la población.
+        :param cx_prob: Probabilidad de cruce.
+        :param mut_prob: Probabilidad de mutación.
+        :param max_evaluations: Presupuesto máximo de evaluaciones de fitness. Si es None,
+            se ignora y el control se hace solo por número de generaciones.
+        :param verbose: Si es True, imprime información de progreso.
+        """
 
         # Configuración de estadísticas
         stats = tools.Statistics(lambda ind: ind.fitness.values)
@@ -156,10 +175,16 @@ class GraphChordalizer:
             for ind, fit in zip(pop, fitnesses):
                 ind.fitness.values = fit
 
+            evaluations = len(pop)
+
             hof = tools.HallOfFame(1)
             hof.update(pop)
 
             for gen in range(num_generations):
+                # Si ya alcanzamos el presupuesto, detenemos el ciclo
+                if max_evaluations is not None and evaluations >= max_evaluations:
+                    break
+
                 # Selección de padres (toda la población compite)
                 offspring = self.toolbox.select_parents(pop, len(pop))
                 offspring = list(map(self.toolbox.clone, offspring))
@@ -183,16 +208,19 @@ class GraphChordalizer:
                 for ind, fit in zip(invalid_ind, fitnesses):
                     ind.fitness.values = fit
 
+                evaluations += len(invalid_ind)
+
                 # Supervivencia: Selección elitista combinando Padres + Hijos
                 pop = self.toolbox.select_offspring(pop + offspring, k=population_size)
 
                 # Guardar estadísticas
                 hof.update(pop)
                 record = stats.compile(pop)
+                record["evals"] = evaluations
                 logbook.record(gen=gen, **record)
 
                 if verbose:
-                    print(f"Gen {gen}: Mejor {record['min']:.0f}")
+                    print(f"Gen {gen}: Mejor {record['min']:.0f} | Evals {evaluations}")
 
         finally:
             if pool:
