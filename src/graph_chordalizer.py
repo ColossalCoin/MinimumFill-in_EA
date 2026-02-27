@@ -1,10 +1,9 @@
 import random
 import time
 import multiprocessing
-import networkx as nx
 import numpy as np
 from deap import creator, base, tools
-from utils.heuristics import count_fillin
+from utils.heuristics import count_fillin_adjmatrix
 
 if not hasattr(creator, "FitnessMin"):  # Evita conflictos por redefinir la misma función de aptitud
     # DEAP requiere que se indique si la función de aptitud debe ser minimizada o maximizada. Declaramos que la función
@@ -18,20 +17,28 @@ if not hasattr(creator, "FitnessMin"):  # Evita conflictos por redefinir la mism
 
 # Definimos el AE como una clase.
 class GraphChordalizer:
-    def __init__(self, graph):
+    def __init__(self, adj_matrix: np.ndarray):
         """
         Constructor para inicializar una instancia con atributos de datos específicos.
 
-        Inicializa la representación del grafo a partir de la matriz proporcionada usando NetworkX, calcula el número
+        Inicializa la representación del grafo a partir de una matriz de adyacencia NumPy, calcula el número
         de nodos en el grafo y configura una instancia de caja de herramientas (toolbox) para operaciones posteriores.
 
-        :param matrix_data: Matriz de adyacencia cuadrada que define la estructura del grafo. Cada entrada en la matriz
-            representa si los vértices correspondientes osn adyacentes.
-        :type matrix_data: numpy.ndarray
+        :param adj_matrix: Matriz de adyacencia cuadrada (n x n). Cada entrada indica si los vértices correspondientes
+            son adyacentes. Se asume grafo no dirigido (simétrico) y sin autolazos (diagonal en 0).
+        :type adj_matrix: numpy.ndarray
         """
-        # Suponemos que la matriz del constructor es un grafo de NetworkX.
-        self.graph = graph
-        self.num_vertex = self.graph.number_of_nodes()
+        A = np.asarray(adj_matrix)
+        if A.ndim != 2 or A.shape[0] != A.shape[1]:
+            raise ValueError("adj_matrix debe ser una matriz cuadrada (n x n).")
+
+        # Guardamos una copia booleana ligera; no se modifica durante el AE (solo se copia en evaluación).
+        self.adj_matrix = (A != 0)
+        # Normalizamos una sola vez para evitar validaciones/costos por evaluación.
+        if not np.array_equal(self.adj_matrix, self.adj_matrix.T):
+            self.adj_matrix |= self.adj_matrix.T
+        self.adj_matrix[np.arange(self.adj_matrix.shape[0]), np.arange(self.adj_matrix.shape[0])] = False
+        self.num_vertex = int(self.adj_matrix.shape[0])
         # Toolbox permite llamar a los operadores definidos para cada individuo o multiconjunto de individuos.
         self.toolbox = base.Toolbox()
         self._setup_toolbox()   # Es necesario cargar los operadores desde un inicio
@@ -64,13 +71,13 @@ class GraphChordalizer:
         self.toolbox.register("select_offspring", tools.selTournament, tournsize=3)
 
         # Evaluamos el fitness de los individuos
-        self.toolbox.register("evaluate", self.eval_wrapper, graph=self.graph)
+        self.toolbox.register("evaluate", self.eval_wrapper, adj_matrix=self.adj_matrix)
 
     @staticmethod
-    def eval_wrapper(individual, graph):
+    def eval_wrapper(individual, adj_matrix):
         """Wrapper para adaptar la firma de count_fillin a lo que pide DEAP (tupla)"""
         # count_fillin devuelve un int, DEAP necesita (int, )
-        return count_fillin(graph, individual),
+        return count_fillin_adjmatrix(adj_matrix, individual, validate=False),
 
     @ staticmethod
     def swap_mutation(individual):
@@ -198,11 +205,15 @@ class GraphChordalizer:
 
 # --- Probamos que el código funcione correctamente ---
 if __name__ == "__main__":
-    # Creamos el grafo C_6, cuya triangulación mínima agrega 3 aristas.
-    G = nx.cycle_graph(6)
+    # Grafo ciclo C_6 en matriz de adyacencia, cuya triangulación mínima agrega 3 aristas.
+    n = 6
+    A = np.zeros((n, n), dtype=np.uint8)
+    for i in range(n):
+        A[i, (i + 1) % n] = 1
+        A[(i + 1) % n, i] = 1
 
     # Creamos una instancia de la clase GraphChordalizer
-    graph_chordalizer = GraphChordalizer(G)
+    graph_chordalizer = GraphChordalizer(A)
 
     # Corremos el algoritmo.
     hof, logs = graph_chordalizer.run_ea(num_generations=20, population_size=10)
