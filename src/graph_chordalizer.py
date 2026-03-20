@@ -26,7 +26,7 @@ if not hasattr(creator, "FitnessMin"):  # Evita conflictos por redefinir la mism
 
 # Definimos el AE como una clase.
 class GraphChordalizer:
-    def __init__(self, adj_matrix: np.ndarray, tournsize: int = 3):
+    def __init__(self, adj_matrix: np.ndarray):
         """
         Constructor para inicializar una instancia con atributos de datos específicos.
 
@@ -36,8 +36,6 @@ class GraphChordalizer:
         :param adj_matrix: Matriz de adyacencia cuadrada (n x n). Cada entrada indica si los vértices correspondientes
             son adyacentes. Se asume grafo no dirigido (simétrico) y sin autolazos (diagonal en 0).
         :type adj_matrix: numpy.ndarray
-        :param tournsize: Tamaño del torneo para la selección de supervivientes.
-        :type tournsize: int
         """
         A = np.asarray(adj_matrix)
         if A.ndim != 2 or A.shape[0] != A.shape[1]:
@@ -50,7 +48,6 @@ class GraphChordalizer:
             self.adj_matrix |= self.adj_matrix.T
         self.adj_matrix[np.arange(self.adj_matrix.shape[0]), np.arange(self.adj_matrix.shape[0])] = False
         self.num_vertex = int(self.adj_matrix.shape[0])
-        self.tournsize = int(tournsize)
         # Toolbox permite llamar a los operadores definidos para cada individuo o multiconjunto de individuos.
         self.toolbox = base.Toolbox()
         self._setup_toolbox()   # Es necesario cargar los operadores desde un inicio
@@ -80,7 +77,7 @@ class GraphChordalizer:
         self.toolbox.register("select_parents", self.roulette_selection)
         self.toolbox.register("mate", tools.cxUniformPartialyMatched, indpb=0.5)
         self.toolbox.register("mutate", self.swap_mutation)
-        self.toolbox.register("select_offspring", tools.selTournament, tournsize=self.tournsize)
+        self.toolbox.register("select_offspring", tools.selTournament)
 
         # Evaluamos el fitness de los individuos
         self.toolbox.register("evaluate", self.eval_wrapper, adj_matrix=self.adj_matrix)
@@ -143,13 +140,14 @@ class GraphChordalizer:
 
     def run_ea(
         self,
-        num_generations=50,
-        population_size=100,
-        cx_prob=0.7,
-        mut_prob=0.2,
-        max_evaluations=None,
-        verbose=False,
-    ):
+        num_generations: int = 50,
+        population_size: int = 100,
+        cx_prob: float = 0.7,
+        mut_prob: float = 0.2,
+        tournsize: int = 3,
+        max_evaluations: int | None = None,
+        verbose: bool = False,
+    ) -> tuple[list, tools.Logbook]:
         """
         Ejecuta el algoritmo evolutivo (EA) con opción de limitar el número total de evaluaciones de fitness.
 
@@ -157,6 +155,7 @@ class GraphChordalizer:
         :param population_size: Tamaño de la población.
         :param cx_prob: Probabilidad de cruce.
         :param mut_prob: Probabilidad de mutación.
+        :param tournsize: Tamaño del torneo para la selección de supervivientes.
         :param max_evaluations: Presupuesto máximo de evaluaciones de fitness. Si es None,
             se ignora y el control se hace solo por número de generaciones.
         :param verbose: Si es True, imprime información de progreso.
@@ -168,6 +167,7 @@ class GraphChordalizer:
         stats.register("avg", np.mean)
 
         logbook = tools.Logbook()
+        logbook.header = ["gen", "evals", "min", "avg"]
 
         # POOL: Manejo seguro para Windows/Linux
         pool = None
@@ -223,7 +223,7 @@ class GraphChordalizer:
                 evaluations += len(invalid_ind)
 
                 # Supervivencia: Selección elitista combinando Padres + Hijos
-                pop = self.toolbox.select_offspring(pop + offspring, k=population_size)
+                pop = self.toolbox.select_offspring(pop + offspring, k=population_size, tournsize=tournsize)
 
                 # Guardar estadísticas
                 hof.update(pop)
@@ -258,4 +258,6 @@ if __name__ == "__main__":
     # Corremos el algoritmo.
     hof, logs = graph_chordalizer.run_ea(num_generations=20, population_size=10)
 
-    print(hof, hof.fitness.values)
+    print(logs)
+    print("Mejor individuo:", hof[0])
+    print("Fitness:", hof[0].fitness.values)

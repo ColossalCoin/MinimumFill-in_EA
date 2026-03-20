@@ -59,15 +59,13 @@ class GridSearchTuner:
 
                 for rep in range(self.repetitions):
                     # Ejecutar EA
-                    ea = GraphChordalizer(
-                        self.adj_matrix,
-                        tournsize=config.get('tournsize', 3),
-                    )
+                    ea = GraphChordalizer(self.adj_matrix)
                     best_ind, logbook = ea.run_ea(
                         num_generations=self.max_generations,
                         population_size=config['pop_size'],
                         cx_prob=config.get('cx_prob', 0.8),
                         mut_prob=config.get('mut_prob', 0.2),
+                        tournsize=config.get('tournsize', 3),
                         max_evaluations=self.eval_budget,
                         verbose=False
                     )
