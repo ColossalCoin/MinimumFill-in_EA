@@ -1,5 +1,0 @@
-targetRunner = "target-runner.bat"
-parameterFile = "./parameters.txt"
-trainInstancesDir = "./datasets/train" # Carpeta donde tienes tus grafos del PACE 2017
-maxExperiments = 1000                  # Presupuesto total de irace (cuántas corridas en total hará)
-testType = "F-test"                    # Prueba estadística para descartar malas configuraciones
