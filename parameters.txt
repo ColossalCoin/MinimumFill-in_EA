@@ -1,0 +1,5 @@
+# name       switch           type  values
+pop_size     "--pop_size "    i     (50, 500)
+cx_prob      "--cx_prob "     r     (0.6, 1.0)
+mut_prob     "--mut_prob "    r     (0.01, 1.0)
+tournsize    "--tournsize "   i     (2, 5)
