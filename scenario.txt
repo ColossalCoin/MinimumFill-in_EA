@@ -1,4 +1,4 @@
-targetRunner = "target-runner.bat"
+targetRunner = "target_runner.bat"
 parameterFile = "parameters.txt"
 trainInstancesDir = "./datasets/train" # Asegúrate de tener al menos 1 o 2 grafos pequeños aquí
 maxExperiments = 15                    # Reducido solo para la prueba
