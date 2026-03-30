@@ -19,7 +19,7 @@ shift
 goto loop
 
 :run
-.\thesis_env\Scripts\python.exe irace_wrapper.py --inst %INSTANCE% --seed %SEED% %REST_ARGS%
+"C:\Users\a-b-e\anaconda3\envs\thesis_env\python.exe" irace_wrapper.py --inst %INSTANCE% --seed %SEED% %REST_ARGS%
 
 :: Capturamos errores silenciosamente para que irace no se confunda
 if %ERRORLEVEL% NEQ 0 (
