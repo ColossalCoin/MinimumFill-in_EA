@@ -1,5 +1,5 @@
 targetRunner = "target_runner.bat"
 parameterFile = "parameters.txt"
 trainInstancesDir = "./data/train" # Asegúrate de tener al menos 1 o 2 grafos pequeños aquí
-maxExperiments = 200                    # Reducido solo para la prueba
+maxExperiments = 5000                    # Reducido solo para la prueba
 testType = "F-test"
