@@ -1,15 +1,15 @@
 import argparse
 import sys
+import os
 import random
+import datetime
 import numpy as np
-from pathlib import Path
 
-# Añadimos el root al path, igual que en tus scripts
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.graph_loader import load_pace_graph, nx_to_adj_matrix
+from utils.graph_loader import load_pace_graph, nx_to_adj_matrix
 from src.graph_chordalizer import GraphChordalizer
 
 
@@ -42,6 +42,16 @@ def main():
 
     A = nx_to_adj_matrix(G)
 
+    # --- BITÁCORA DE INICIO ---
+    # Sacamos solo el nombre del archivo (ej. "89.graph") para que el log no sea larguísimo
+    nombre_grafo = os.path.basename(args.inst)
+
+    with open("irace_tracking.log", "a") as log_file:
+        hora_inicio = datetime.datetime.now().strftime("%H:%M:%S")
+        mensaje_inicio = f"[{hora_inicio}] INICIANDO | Grafo: {nombre_grafo} | Pop: {args.pop_size} | Mut: {args.mut_prob:.2f} | Cx: {args.cx_prob:.2f}\n"
+        log_file.write(mensaje_inicio)
+    # ---------------------------------
+
     # 3. Inicializar el algoritmo
     ea = GraphChordalizer(A)
 
@@ -56,8 +66,16 @@ def main():
         verbose=False
     )
 
-    # 5. Imprimir ÚNICAMENTE el costo. Esto es lo que lee irace.
     cost = best_ind.fitness.values[0]
+
+    # --- BITÁCORA DE FIN ---
+    with open("irace_tracking.log", "a") as log_file:
+        hora_fin = datetime.datetime.now().strftime("%H:%M:%S")
+        mensaje_fin = f"[{hora_fin}] TERMINADO | Grafo: {nombre_grafo} | Costo hallado: {cost}\n"
+        log_file.write(mensaje_fin)
+    # ---------------------------------
+
+    # 5. Imprimir ÚNICAMENTE el costo. Esto es lo que lee irace.
     print(cost)
 
 
