@@ -195,6 +195,10 @@ class GraphChordalizer:
             hof = tools.HallOfFame(1)
             hof.update(pop)
 
+            # Registro del estado inicial (generación -1) para análisis de convergencia
+            initial_record = stats.compile(pop)
+            logbook.record(gen=-1, evals=evaluations, **initial_record)
+
             for gen in range(num_generations):
                 # Si ya alcanzamos el presupuesto, detenemos el ciclo
                 if max_evaluations is not None and evaluations >= max_evaluations:
