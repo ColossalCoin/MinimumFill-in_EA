@@ -176,7 +176,7 @@ class GraphChordalizer:
         pool = None
         try:
             # Solo usar multiproceso si el grafo es grande (>50 nodos), si no el overhead gana
-            if self.num_vertex > 50:
+            if use_multiprocessing and self.num_vertex > 50:
                 pool = multiprocessing.Pool()
                 self.toolbox.register("map", pool.map)
 
