@@ -147,6 +147,7 @@ class GraphChordalizer:
         tournsize: int = 3,
         max_evaluations: int | None = None,
         verbose: bool = False,
+        use_multiprocessing: bool = True,
     ) -> tuple[list, tools.Logbook]:
         """
         Ejecuta el algoritmo evolutivo (EA) con opción de limitar el número total de evaluaciones de fitness.
@@ -159,6 +160,8 @@ class GraphChordalizer:
         :param max_evaluations: Presupuesto máximo de evaluaciones de fitness. Si es None,
             se ignora y el control se hace solo por número de generaciones.
         :param verbose: Si es True, imprime información de progreso.
+        :param use_multiprocessing: Si es False, deshabilita el pool interno (útil al
+            lanzar múltiples experimentos en secuencia para evitar overhead de pools).
         """
 
         # Configuración de estadísticas
