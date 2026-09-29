@@ -1,8 +1,11 @@
-import random
-import time
-import sys
+from __future__ import annotations
+
+import logging
 import multiprocessing
+import random
+import sys
 from pathlib import Path
+from typing import Sequence
 
 import numpy as np
 from deap import creator, base, tools
@@ -13,6 +16,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from utils.heuristics import count_fillin
+
+logger = logging.getLogger(__name__)
 
 if not hasattr(creator, "FitnessMin"):  # Evita conflictos por redefinir la misma función de aptitud
     # DEAP requiere que se indique si la función de aptitud debe ser minimizada o maximizada. Declaramos que la función
@@ -48,6 +53,7 @@ class GraphChordalizer:
             self.adj_matrix |= self.adj_matrix.T
         self.adj_matrix[np.arange(self.adj_matrix.shape[0]), np.arange(self.adj_matrix.shape[0])] = False
         self.num_vertex = int(self.adj_matrix.shape[0])
+        self._fitness_cache: dict[tuple[int, ...], int] = {}
         # Toolbox permite llamar a los operadores definidos para cada individuo o multiconjunto de individuos.
         self.toolbox = base.Toolbox()
         self._setup_toolbox()   # Es necesario cargar los operadores desde un inicio
@@ -88,7 +94,38 @@ class GraphChordalizer:
         # count_fillin devuelve un int, DEAP necesita (int, )
         return count_fillin(adj_matrix, individual, validate=False),
 
-    @ staticmethod
+    def _assign_fitness(
+        self,
+        individuals: Sequence,
+        remaining: int | None,
+    ) -> int:
+        """
+        Asigna fitness a individuos inválidos usando caché por permutación.
+
+        Un hit de caché no consume presupuesto. Un miss llama a ``count_fillin``
+        y cuenta como una evaluación. Si ``remaining`` es 0, los misses se
+        dejan sin fitness válido.
+
+        :return: Número de llamadas reales a ``count_fillin`` (misses).
+        """
+        new_evals = 0
+        for ind in individuals:
+            if ind.fitness.valid:
+                continue
+            key = tuple(int(v) for v in ind)
+            cached = self._fitness_cache.get(key)
+            if cached is not None:
+                ind.fitness.values = (cached,)
+                continue
+            if remaining is not None and new_evals >= remaining:
+                continue
+            cost = int(count_fillin(self.adj_matrix, ind, validate=False))
+            self._fitness_cache[key] = cost
+            ind.fitness.values = (cost,)
+            new_evals += 1
+        return new_evals
+
+    @staticmethod
     def swap_mutation(individual):
         """
         SwapMutation (Mutación por Intercambio) es un operador de mutación de algoritmos genéticos. Selecciona
@@ -180,17 +217,22 @@ class GraphChordalizer:
                 pool = multiprocessing.Pool()
                 self.toolbox.register("map", pool.map)
 
+            # Independiente por ejecución: no reutilizar misses de un run_ea previo.
+            self._fitness_cache.clear()
+
             # --- ALGORITMO EVOLUTIVO (Mu + Lambda) ---
 
             # 1. Población Inicial
             pop = self.toolbox.population(n=population_size)
 
-            # Evaluación inicial
-            fitnesses = list(map(self.toolbox.evaluate, pop))
-            for ind, fit in zip(pop, fitnesses):
-                ind.fitness.values = fit
-
-            evaluations = len(pop)
+            remaining = None if max_evaluations is None else max(0, int(max_evaluations))
+            evaluations = self._assign_fitness(pop, remaining)
+            pop = [ind for ind in pop if ind.fitness.valid]
+            if not pop:
+                raise RuntimeError(
+                    "El presupuesto de evaluaciones no alcanzó para evaluar "
+                    "ningún individuo de la población inicial."
+                )
 
             hof = tools.HallOfFame(1)
             hof.update(pop)
@@ -221,16 +263,20 @@ class GraphChordalizer:
                         self.toolbox.mutate(mutant)
                         del mutant.fitness.values
 
-                # Evaluación de nuevos candidatos
-                invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-                fitnesses = map(self.toolbox.evaluate, invalid_ind)
-                for ind, fit in zip(invalid_ind, fitnesses):
-                    ind.fitness.values = fit
+                remaining = (
+                    None
+                    if max_evaluations is None
+                    else max(0, int(max_evaluations) - evaluations)
+                )
+                evaluations += self._assign_fitness(offspring, remaining)
 
-                evaluations += len(invalid_ind)
-
-                # Supervivencia: Selección elitista combinando Padres + Hijos
-                pop = self.toolbox.select_offspring(pop + offspring, k=population_size, tournsize=tournsize)
+                # No mezclar hijos sin fitness (presupuesto agotado a mitad de generación)
+                valid_offspring = [ind for ind in offspring if ind.fitness.valid]
+                pop = self.toolbox.select_offspring(
+                    pop + valid_offspring,
+                    k=population_size,
+                    tournsize=tournsize,
+                )
 
                 # Guardar estadísticas
                 hof.update(pop)
@@ -239,7 +285,7 @@ class GraphChordalizer:
                 logbook.record(gen=gen, **record)
 
                 if verbose:
-                    print(f"Gen {gen}: Mejor {record['min']:.0f} | Evals {evaluations}")
+                    logger.info("Gen %s: Mejor %.0f | Evals %s", gen, record["min"], evaluations)
 
         finally:
             if pool:

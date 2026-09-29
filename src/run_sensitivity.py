@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 run_sensitivity.py
 ==================
@@ -14,7 +13,7 @@ Requisitos previos
 - Aplicar los tres cambios indicados en graph_chordalizer.py (use_multiprocessing,
   registro gen=-1 en logbook).
 - Los archivos de grafos deben estar en DATASETS_DIR con el patrón de nombres de PACE 2017
-  (p. ej. exact_009.gr, exact_051.gr, …). Ajusta FILE_TEMPLATE si tu convención difiere.
+  (p. ej. 9.graph, 51.graph, …). Ajusta FILE_TEMPLATE si tu convención difiere.
 
 Uso
 ---
@@ -49,8 +48,8 @@ from utils.heuristics import greedy_minimum_degree
 #  CONFIGURACIÓN GLOBAL
 # ═══════════════════════════════════════════════════════════════════════════════
 
-DATASETS_DIR = Path(__file__).resolve().parent.parent / "data" / "train"
-RESULTS_DIR  = Path(__file__) / "processed"
+DATASETS_DIR = Path(__file__).resolve().parents[1] / "data" / "train"
+RESULTS_DIR  = Path(__file__).resolve().parents[1] / "data" / "processed"
 
 N_RUNS          = 30        # Ejecuciones independientes por (instancia, config)
 MAX_EVALUATIONS = 2_000     # Presupuesto fijo, igual que en sintonización
@@ -62,18 +61,18 @@ FILE_TEMPLATE = "{id}.graph"
 
 # ── Instancias del benchmark (Cuadro 3.1) ─────────────────────────────────────
 BENCHMARK_INSTANCES: list[dict] = [
-    {"id": "009", "category": "small"},
-    {"id": "051", "category": "small"},
-    {"id": "003", "category": "medium"},
-    {"id": "026", "category": "medium"},
-    {"id": "040", "category": "medium"},
-    {"id": "089", "category": "medium"},
-    {"id": "092", "category": "medium"},
-    {"id": "056", "category": "large"},
-    {"id": "065", "category": "large"},
-    {"id": "071", "category": "large"},
-    {"id": "072", "category": "large"},
-    {"id": "094", "category": "large"},
+    {"id": "9", "category": "small"},
+    {"id": "51", "category": "small"},
+    {"id": "3", "category": "medium"},
+    {"id": "26", "category": "medium"},
+    {"id": "40", "category": "medium"},
+    {"id": "89", "category": "medium"},
+    {"id": "92", "category": "medium"},
+    {"id": "56", "category": "large"},
+    {"id": "65", "category": "large"},
+    {"id": "71", "category": "large"},
+    {"id": "72", "category": "large"},
+    {"id": "94", "category": "large"},
 ]
 
 # ── Configuración óptima encontrada por irace (Cuadro 4.1) ────────────────────
@@ -116,9 +115,9 @@ def find_graph_file(datasets_dir: Path, graph_id: str) -> Optional[Path]:
     """
     candidates = [
         datasets_dir / FILE_TEMPLATE.format(id=graph_id),
-        datasets_dir / f"{graph_id}.gr",
-        datasets_dir / f"minfill_{graph_id}.gr",
-        datasets_dir / f"exact{graph_id}.gr",
+        datasets_dir / f"{graph_id}.graph",
+        datasets_dir / f"minfill_{graph_id}.graph",
+        datasets_dir / f"exact{graph_id}.graph",
     ]
     for path in candidates:
         if path.exists():

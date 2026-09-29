@@ -20,7 +20,7 @@ def count_fillin(adj_matrix: np.ndarray, ordering, *, validate: bool = True) -> 
         if A.ndim != 2 or A.shape[0] != A.shape[1]:
             raise ValueError("adj_matrix debe ser una matriz cuadrada (n x n).")
         n = int(A.shape[0])
-        H = (A != 0).copy()
+        H = (A != 0).(copy)
         if not np.array_equal(H, H.T):
             H |= H.T
         H[np.arange(n), np.arange(n)] = False
