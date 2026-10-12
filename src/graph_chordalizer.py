@@ -182,7 +182,7 @@ class GraphChordalizer:
         cx_prob: float = 0.7,
         mut_prob: float = 0.2,
         tournsize: int = 3,
-        max_evaluations: int | None = None,
+        max_evaluations: int | None = 50_000,
         verbose: bool = False,
         use_multiprocessing: bool = True,
     ) -> tuple[list, tools.Logbook]:

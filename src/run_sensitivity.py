@@ -48,12 +48,12 @@ from utils.heuristics import greedy_minimum_degree
 #  CONFIGURACIÓN GLOBAL
 # ═══════════════════════════════════════════════════════════════════════════════
 
-DATASETS_DIR = Path(__file__).resolve().parents[1] / "data" / "train"
+DATASETS_DIR = Path(__file__).resolve().parents[1] / "data" / "test"
 RESULTS_DIR  = Path(__file__).resolve().parents[1] / "data" / "processed"
 
-N_RUNS          = 30        # Ejecuciones independientes por (instancia, config)
-MAX_EVALUATIONS = 2_000     # Presupuesto fijo, igual que en sintonización
-NUM_GENERATIONS = 10_000    # Techo alto; el control real lo lleva MAX_EVALUATIONS
+N_RUNS          = 5        # Ejecuciones independientes por (instancia, config)
+MAX_EVALUATIONS = 50_000     # Presupuesto fijo, igual que en sintonización
+NUM_GENERATIONS = 100_000    # Techo alto; el control real lo lleva MAX_EVALUATIONS
 
 # Patrón de nombre de archivo PACE 2017.  {id} se reemplaza por el ID de 3 dígitos.
 # Cambia este template si tu convención es distinta (p. ej. "minfill_{id}.gr").
@@ -61,18 +61,12 @@ FILE_TEMPLATE = "{id}.graph"
 
 # ── Instancias del benchmark (Cuadro 3.1) ─────────────────────────────────────
 BENCHMARK_INSTANCES: list[dict] = [
-    {"id": "9", "category": "small"},
-    {"id": "51", "category": "small"},
-    {"id": "3", "category": "medium"},
-    {"id": "26", "category": "medium"},
-    {"id": "40", "category": "medium"},
-    {"id": "89", "category": "medium"},
-    {"id": "92", "category": "medium"},
-    {"id": "56", "category": "large"},
-    {"id": "65", "category": "large"},
-    {"id": "71", "category": "large"},
-    {"id": "72", "category": "large"},
-    {"id": "94", "category": "large"},
+    {"id": "10", "category": "large"},
+    {"id": "67", "category": "large"},
+    {"id": "2", "category": "medium"},
+    {"id": "18", "category": "medium"},
+    {"id": "86", "category": "medium"},
+    {"id": "50", "category": "small"},
 ]
 
 # ── Configuración óptima encontrada por irace (Cuadro 4.1) ────────────────────
@@ -293,7 +287,7 @@ def build_summary_csv(results_dir: Path) -> Path:
         graph_id   = data["graph_id"]
         category   = data["category"]
         n_vertices = data["n_vertices"]
-        baseline   = data["baseline"]
+        amd        = data["baseline"]
         cfg_name   = data["config_name"]
         cfg        = data["config"]
 
@@ -302,7 +296,8 @@ def build_summary_csv(results_dir: Path) -> Path:
                 "graph_id"        : graph_id,
                 "category"        : category,
                 "n_vertices"      : n_vertices,
-                "baseline"        : baseline,
+                "AMD"             : amd,
+                "baseline"        : run["best_per_gen"][0],
                 "config_name"     : cfg_name,
                 "population_size" : cfg["population_size"],
                 "cx_prob"         : cfg["cx_prob"],
