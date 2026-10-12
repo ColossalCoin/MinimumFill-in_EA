@@ -305,12 +305,13 @@ def build_summary_csv(results_dir: Path) -> Path:
                 "tournsize"       : cfg["tournsize"],
                 "run_id"          : run["run_id"],
                 "final_best"      : run["final_best"],
-                "success"         : int(run["success"]),
+                "success_amd"     : int(run["success"]),
+                "success_fg"      : int(run["final_best"] <= run["best_per_gen"][0]),
                 "aes"             : run["aes"] if run["aes"] is not None else "",
                 "runtime_sec"     : run["runtime_sec"],
                 # Gap relativo respecto a la referencia de mínimo grado
                 "gap_pct"         : round(
-                    100.0 * (run["final_best"] - baseline) / max(baseline, 1), 2
+                    100.0 * (run["final_best"] - amd) / max(amd, 1), 2
                 ),
             })
 
