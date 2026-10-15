@@ -307,6 +307,7 @@ def build_summary_csv(results_dir: Path) -> Path:
                 "final_best"      : run["final_best"],
                 "success_amd"     : int(run["success"]),
                 "success_fg"      : int(run["final_best"] <= run["best_per_gen"][0]),
+                "gens_bi"         : int(next((g for g, b in zip(run["gens"], run["best_per_gen"]) if b < run["best_per_gen"][0]), None) + 1),
                 "aes"             : run["aes"] if run["aes"] is not None else "",
                 "runtime_sec"     : run["runtime_sec"],
                 # Gap relativo respecto a la referencia de mínimo grado
